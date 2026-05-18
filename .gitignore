@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local artifacts (regeneratable)
+data/
+logs/
+modal_results/
+sessions/
+
+# Large per-pair visualization output (regenerate via script)
+visualizations/all_pairs/
+
+# LaTeX intermediate
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.fdb_latexmk
+*.fls
+
+# Agent state
+.claude/

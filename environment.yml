@@ -1,0 +1,17 @@
+name: placement-net
+channels:
+  - pytorch
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pytorch=2.1
+  - numpy
+  - scipy
+  - scikit-learn
+  - pip
+  - pip:
+    - shapely>=2.0
+    - matplotlib
+    - pyyaml
+    - tensorboard
+    - tqdm
