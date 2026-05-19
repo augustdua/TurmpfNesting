@@ -44,9 +44,9 @@ from src.geometry.rewards import compute_reward_exp
 from src.geometry.ifp import compute_ifp_exact
 from scripts.rasterize_ifp_union import rasterize_polygon
 
-CONVEX_VAL_START = 10800
+CONVEX_VAL_START = 0
 CONVEX_VAL_END = 12000
-CONCAVE_VAL_START = 9000
+CONCAVE_VAL_START = 0
 CONCAVE_VAL_END = 10000
 BF_CHUNKS_DIR = "data/reward_heatmaps_exp_k10_inside.npy_chunks"
 
@@ -858,7 +858,7 @@ def write_tex(out_tex, ckpt, convex_rows, concave_rows,
     parts = [LATEX_PREAMBLE]
     parts.append(r"""
 \title{\textsf{\Huge Placement Pipeline}\\[0.3em]\textsf{\Large Visualization Report}}
-\author{NestingRL --- Placement Network}
+\author{August Dua\\\textit{\normalsize MSc Math, TUM (Candidate)}}
 \date{\today}
 
 \begin{document}
