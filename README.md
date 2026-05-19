@@ -11,19 +11,25 @@ Per-(pair, θ) U-Net with 2-channel input (`fs_mask`, `rotated_part_mask`), both
 ## Quickstart
 
 ```bash
-conda env create -f environment.yml
-conda activate placement-net
+git clone https://github.com/augustdua/TurmpfNesting.git
+cd TurmpfNesting
 
-# Run geometry tests
+# pip:
+pip install -r requirements.txt
+# or conda:
+conda env create -f environment.yml && conda activate placement-net
+
+# Verify the geometry primitives:
 python -m tests.test_geometry
 
-# Smoke test: run the trained model + Shapely refinement on a few random
-# convex val pairs and print the reward before/after refinement.
-python -m scripts.smoke_refine
+# Self-contained inference demo (no external data needed):
+python -m scripts.demo
 
-# Generate the multi-page LaTeX visualization report (needs pdflatex).
+# Multi-page LaTeX visualization report (requires pdflatex):
 python -m scripts.generate_placement_report
 ```
+
+For the full step-by-step setup (CUDA/CPU PyTorch, Modal training, troubleshooting, data files), see **[instructions.md](instructions.md)**.
 
 ## What's here
 

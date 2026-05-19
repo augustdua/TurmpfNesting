@@ -1,0 +1,18 @@
+# Core (always required)
+numpy
+shapely>=2.0
+pyclipper
+pillow
+
+# PyTorch (>=2.1). For GPU, install a CUDA build first, e.g.:
+#   pip install torch==2.1.* --index-url https://download.pytorch.org/whl/cu121
+torch>=2.1
+
+# Visualization (PDF report + matplotlib figures in the report)
+matplotlib
+
+# Training only
+tensorboard
+
+# Modal pipelines only (heatmap precompute, combined-corpus build, Modal training)
+modal
