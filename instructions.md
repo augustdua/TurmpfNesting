@@ -112,16 +112,13 @@ Both polygons must lie in `[-1, 1] × [-1, 1]` (the model's normalized world). I
 
 ### 4.3 Smoke test against the held-out validation set
 
-`scripts/smoke_refine.py` evaluates the model on `N` random pairs from the convex validation split. It needs `data/bc_snapshot_raster128.pkl` (482 MB), which is not in the repo. Two ways to get it:
+`scripts/smoke_refine.py` evaluates the model on `N` random pairs from the convex validation split. It needs `data/bc_snapshot_raster128.pkl` (482 MB), which is not in the repo. Generate it (and the concave pkl you'll need for §5) with:
 
 ```bash
-# Option A - regenerate it locally (a few minutes, no Modal, no external download):
-python -m scripts.generate_seed_pkls --n-convex 12000 --n-concave 0
-
-# Option B - drop a pre-existing copy into data/ and skip the previous step.
+python -m scripts.generate_seed_pkls
 ```
 
-Then:
+That's the one command for all seed data — see §5 for what it produces. Then:
 
 ```bash
 python -m scripts.smoke_refine                                    # 5 random val pairs
