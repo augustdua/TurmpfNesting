@@ -152,11 +152,50 @@ python -m scripts.generate_placement_report --no-compile          # emit .tex on
 - `pdflatex` on PATH (install MiKTeX on Windows or TeX Live elsewhere; verify with `pdflatex --version`). Use `--no-compile` to skip this and produce only the `.tex` + figures.
 - `data/bc_snapshot_raster128.pkl` (482 MB) — convex source. Regenerate with `python -m scripts.generate_seed_pkls`.
 - `data/bo_train_pool_10k.pkl` (709 MB) — concave source. Same command regenerates this.
-- `data/reward_heatmaps_exp_k10_inside.npy_chunks/pair_NNNNN.npy` (27 GB) — **optional**. Pre-computed brute-force reward heatmaps for the convex pairs. When absent, the report script falls back to computing the BF heatmap on the fly per picked pair (~7–40 s each), exactly like it already does for concave pairs. The chunks directory only speeds things up if you're rendering hundreds of pages.
+- `data/reward_heatmaps_exp_k10_inside.npy_chunks/pair_NNNNN.npy` and `data/reward_heatmaps_concave_exp_k10_inside.npy_chunks/pair_NNNNN.npy` — **optional cache of precomputed BF heatmaps**. The report falls back to on-the-fly Shapely + IFP per picked pair (~7–40 s each) when chunks are missing. Precompute them once with `scripts/precompute_bf.py` (see §5.1 below) if you plan to render many pages or rerun the report.
 
-Concave brute-force is always computed on the fly during the report run (~7–40 s per pair, serial Shapely + IFP).
+> **Note on `--n-convex` / `--n-concave`:** these are sample counts, not pool sizes. Defaults are `12` and `6`. The numbers `12000` / `10000` you'll see in the source are just the *upper bounds* of the validation pool the picks are drawn from. Pass them as sample counts to render the full corpus — see §5.2.
 
-> **Note on `--n-convex` / `--n-concave`:** these are sample counts, not pool sizes. Defaults are `12` and `6`. The numbers `12000` / `10000` in the source are just the upper bounds of the validation pool the picks are drawn from — passing them as sample counts will try to render every val pair, which on the on-the-fly BF path is many hours of CPU. Start small.
+### 5.1 Precompute the BF heatmap cache (optional, for many-page renders)
+
+`scripts/precompute_bf.py` fills the convex and concave BF chunk directories in parallel using `ProcessPoolExecutor`. Each chunk is a `(36, 128, 128) float32` `.npy` (~590 KB). The script is resumable — existing chunk files are skipped on re-run.
+
+```bash
+# Full corpus, all CPU cores. ~5 h convex + ~4 h concave on 16 cores
+# (~25 s mean per pair, embarrassingly parallel).
+python -m scripts.precompute_bf --kind convex
+python -m scripts.precompute_bf --kind concave
+
+# Subset, custom worker count:
+python -m scripts.precompute_bf --kind convex --workers 8 --start 0 --end 500
+
+# Recompute existing chunks:
+python -m scripts.precompute_bf --kind convex --force
+```
+
+Output sizes at full corpus: ~7 GB (12 000 convex chunks) and ~5.8 GB (10 000 concave chunks). Once these directories exist, every subsequent report run uses the cached `r*` heatmaps and the per-pair cost drops to a fraction of a second (just matplotlib + Shapely refinement).
+
+### 5.2 Render the full corpus (12 000 convex + 10 000 concave)
+
+This is the path to a 22 000-page report. **Order matters: precompute the BF cache first, otherwise each picked pair recomputes BF on the fly and the run takes days.**
+
+```bash
+# 1. Seed pkls (~few minutes).
+python -m scripts.generate_seed_pkls
+
+# 2. BF cache (~10 h on 16 cores; resumable, run overnight).
+python -m scripts.precompute_bf --kind convex
+python -m scripts.precompute_bf --kind concave
+
+# 3. Render. --no-compile emits .tex + PNGs only (pdflatex would
+#    almost certainly OOM on a 22 000-page document; build the PDF in
+#    chunks if you need it bound). Plan for tens of GB of PNGs in
+#    visualizations/report/figs/.
+python -m scripts.generate_placement_report \
+    --n-convex 12000 --n-concave 10000 --no-compile
+```
+
+The val pool caps `--n-convex` at `CONVEX_VAL_END = 12000` and `--n-concave` at `CONCAVE_VAL_END = 10000`; values above those are silently clamped.
 
 ---
 
@@ -253,6 +292,8 @@ modal volume get nestingrl-data /checkpoints/perthet_combined/final.pt \
 | Zero-data inference demo | `scripts/demo.py` |
 | Validation smoke test | `scripts/smoke_refine.py` |
 | Local training (assumes precomputed pkl) | `scripts/train_perthet.py` |
+| Local BF heatmap precompute (parallel) | `scripts/precompute_bf.py` |
+| BF heatmap module (used by both report + precompute) | `src/geometry/brute_force.py` |
 | Modal training | `modal_train_perthet.py` |
 | Modal concave heatmap precompute | `modal_concave_precompute.py` |
 | Modal combined-pkl build | `modal_build_combined.py` |
@@ -272,4 +313,7 @@ modal volume get nestingrl-data /checkpoints/perthet_combined/final.pt \
 | `import pyclipper` fails on macOS | `pip install pyclipper` may need build tools; `brew install gcc` then retry. |
 | `FileNotFoundError: data/bc_snapshot_raster128.pkl` (smoke test or report) | The seed pkl isn't on disk. Regenerate it locally with `python -m scripts.generate_seed_pkls` (or pass `--convex-source`/`--source` to point at an existing copy). For a quick model sanity check with no data files at all, use `scripts/demo.py`. |
 | `FileNotFoundError: data/bo_train_pool_10k.pkl` (report) | Same fix — `python -m scripts.generate_seed_pkls` regenerates both seed pkls. |
-| `FileNotFoundError: data/reward_heatmaps_exp_k10_inside.npy_chunks/pair_NNNNN.npy` | Stale message from an older build. The report script now falls back to computing convex BF on the fly when chunks are missing. Pull the latest `main` if you still hit this. |
+| `FileNotFoundError: data/reward_heatmaps_exp_k10_inside.npy_chunks/pair_NNNNN.npy` | Stale message from an older build. The report script now falls back to computing convex BF on the fly when chunks are missing. Pull the latest `main` if you still hit this. To cache the chunks (much faster for large renders) run `python -m scripts.precompute_bf --kind convex`. |
+| Many-page render is taking forever | You're hitting the on-the-fly BF path for every pair. Precompute the cache first: `python -m scripts.precompute_bf --kind convex && python -m scripts.precompute_bf --kind concave`. Resumable — safe to Ctrl-C and re-run. |
+| `pdflatex` OOMs or stalls compiling the full 22 000-page report | LaTeX wasn't built for documents this large. Use `--no-compile` and consume the `.tex` + per-pair PNGs in `visualizations/report/figs/` directly, or split the run into chunks via repeated `--n-convex N --n-concave 0` (and `--n-concave N --n-convex 0`) calls with different `--seed`. |
+| Precompute job dies with `OSError: [Errno 28] No space left on device` | Each chunk is ~590 KB; the full convex + concave cache is ~13 GB. Free up disk or point `--out-dir` at a different volume. |

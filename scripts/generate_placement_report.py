@@ -42,6 +42,10 @@ from src.inference.placement import (
 )
 from src.geometry.rewards import compute_reward_exp
 from src.geometry.ifp import compute_ifp_exact
+from src.geometry.brute_force import (
+    summarize_bf as _summarize_bf,
+    compute_brute_force_on_the_fly,
+)
 from scripts.rasterize_ifp_union import rasterize_polygon
 
 CONVEX_VAL_START = 0
@@ -49,6 +53,7 @@ CONVEX_VAL_END = 12000
 CONCAVE_VAL_START = 0
 CONCAVE_VAL_END = 10000
 BF_CHUNKS_DIR = "data/reward_heatmaps_exp_k10_inside.npy_chunks"
+BF_CHUNKS_DIR_CONCAVE = "data/reward_heatmaps_concave_exp_k10_inside.npy_chunks"
 
 
 # ----------------------------------------------------------------------- #
@@ -156,74 +161,33 @@ def run_pipeline_timed(pm, fs, part, refine_pixels, refine_thetas, k=10.0):
     )
 
 
-def _summarize_bf(bf):
-    """(heatmap, t_idx, r_idx, c_idx, theta_deg, x, y, r_star) from a (36, H, W) array."""
-    flat = int(bf.reshape(-1).argmax())
-    t_idx = flat // (RES * RES)
-    rest = flat % (RES * RES)
-    r_idx = rest // RES
-    c_idx = rest % RES
-    x_star, y_star = _pix_to_world(r_idx, c_idx, RES)
-    theta_deg = 360.0 * t_idx / N_THETA
-    r_star = float(bf[t_idx, r_idx, c_idx])
-    return bf, t_idx, r_idx, c_idx, theta_deg, x_star, y_star, r_star
-
-
 def resolve_brute_force_convex(idx, fs, part, k=10.0):
     """Return BF heatmap for a convex pair.
 
     Loads `BF_CHUNKS_DIR/pair_NNNNN.npy` if present (the precomputed corpus),
     otherwise computes the heatmap on the fly via Shapely + IFP. The on-the-fly
     path matches the concave pipeline (~7-40s per pair) and lets the report run
-    without the 27 GB chunks directory.
+    without the 27 GB chunks directory. To precompute the full corpus locally,
+    run `python -m scripts.precompute_bf --kind convex` first.
     """
     path = os.path.join(BF_CHUNKS_DIR, f"pair_{idx:05d}.npy")
     if os.path.exists(path):
         return _summarize_bf(np.load(path).astype(np.float32))
     print(f"    BF chunk {path} not found - computing on the fly "
-          "(7-40s, requires only the seed pkl)", flush=True)
+          "(7-40s); run `python -m scripts.precompute_bf --kind convex` to "
+          "cache for repeat runs", flush=True)
     return compute_brute_force_on_the_fly(fs, part, k=k)
 
 
-def compute_brute_force_on_the_fly(fs, part, k=10.0, verbose=False):
-    """Compute (36, 128, 128) brute-force reward heatmap for ANY (fs, part) pair.
+def resolve_brute_force_concave(idx, fs, part, k=10.0):
+    """Mirror of resolve_brute_force_convex for the concave pool.
 
-    Per the precompute pipeline (modal_concave_precompute.py): for each rotation
-    theta, compute the IFP, rasterize it, and Shapely-score every pixel inside.
-    Pixels outside the IFP stay zero.
+    Checks BF_CHUNKS_DIR_CONCAVE first, falls back to on-the-fly.
     """
-    from shapely.affinity import translate as shp_translate
-    cx, cy = part.centroid.coords[0]
-    part_centered = shp_translate(part, -cx, -cy)
-
-    thetas = np.linspace(0.0, 360.0, N_THETA, endpoint=False, dtype=np.float32)
-    bf = np.zeros((N_THETA, RES, RES), dtype=np.float32)
-
-    for t_idx, theta in enumerate(thetas):
-        try:
-            ifp = compute_ifp_exact(fs, part, float(theta))
-        except Exception:
-            continue
-        if ifp.is_empty or ifp.area < 1e-8:
-            continue
-        ifp_mask = rasterize_polygon(ifp, RES) > 0
-        if not ifp_mask.any():
-            continue
-        rc = np.argwhere(ifp_mask)
-        if verbose:
-            print(f"      theta {theta:6.1f}deg: {len(rc):5d} IFP px",
-                  flush=True)
-        for row, col in rc:
-            x = col / (RES - 1) * 2 - 1
-            y = 1 - row / (RES - 1) * 2
-            try:
-                bf[t_idx, row, col] = float(
-                    compute_reward_exp(fs, part, x, y, float(theta), k=k)
-                )
-            except Exception:
-                pass
-
-    return _summarize_bf(bf)
+    path = os.path.join(BF_CHUNKS_DIR_CONCAVE, f"pair_{idx:05d}.npy")
+    if os.path.exists(path):
+        return _summarize_bf(np.load(path).astype(np.float32))
+    return compute_brute_force_on_the_fly(fs, part, k=k)
 
 
 # ----------------------------------------------------------------------- #
@@ -1037,8 +1001,8 @@ def main():
             part = wkt_loads(rec["part_poly_wkt"])
             t0 = time.time()
             print(f"  [concave {k+1}/{len(picks)}] pair {idx}: "
-                  f"computing brute-force heatmap ...", flush=True)
-            bf_tuple = compute_brute_force_on_the_fly(fs, part, k=10.0)
+                  f"resolving brute-force heatmap ...", flush=True)
+            bf_tuple = resolve_brute_force_concave(idx, fs, part, k=10.0)
             print(f"    bf done in {time.time()-t0:.1f}s, "
                   f"r* = {bf_tuple[-1]:.3f}", flush=True)
             row = render_pair_figure(fig_path, pm, rec, label, bf_tuple,

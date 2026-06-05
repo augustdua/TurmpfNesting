@@ -84,7 +84,7 @@ See METHODOLOGY.md §Results for the full picture and the figures in the LaTeX r
 
 The full multi-page PDF report — methodology + 12 convex + 6 concave worked examples + summary — is at **[visualizations/report/placement_pipeline_report.pdf](visualizations/report/placement_pipeline_report.pdf)**. Each example page shows the predicted reward heatmap, the brute-force ground-truth heatmap, the model-only placement, the refined placement, and the brute-force placement side by side, with per-pair Shapely-call counts and timings.
 
-Rebuild it with `python -m scripts.generate_placement_report` (needs `pdflatex` and the two seed pkls; regenerate the pkls in a few minutes with `python -m scripts.generate_seed_pkls` — see [instructions.md](instructions.md) §5).
+Rebuild it with `python -m scripts.generate_placement_report` (needs `pdflatex` and the two seed pkls; regenerate the pkls in a few minutes with `python -m scripts.generate_seed_pkls`). For the full 12 000 + 10 000 corpus render, precompute the BF heatmap cache first with `python -m scripts.precompute_bf --kind convex && python -m scripts.precompute_bf --kind concave` (~10 h on 16 cores, resumable) — see [instructions.md](instructions.md) §5.
 
 ## What's here
 
