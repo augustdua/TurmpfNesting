@@ -35,7 +35,10 @@ python -m tests.test_geometry
 # Self-contained inference demo (no external data needed):
 python -m scripts.demo
 
-# Multi-page LaTeX visualization report (requires pdflatex):
+# Regenerate the two seed pkls (~1.2 GB combined, a few minutes):
+python -m scripts.generate_seed_pkls
+
+# Multi-page LaTeX visualization report (requires pdflatex; pass --no-compile to skip it):
 python -m scripts.generate_placement_report
 ```
 
@@ -81,7 +84,7 @@ See METHODOLOGY.md §Results for the full picture and the figures in the LaTeX r
 
 The full multi-page PDF report — methodology + 12 convex + 6 concave worked examples + summary — is at **[visualizations/report/placement_pipeline_report.pdf](visualizations/report/placement_pipeline_report.pdf)**. Each example page shows the predicted reward heatmap, the brute-force ground-truth heatmap, the model-only placement, the refined placement, and the brute-force placement side by side, with per-pair Shapely-call counts and timings.
 
-Rebuild it with `python -m scripts.generate_placement_report` (needs `pdflatex` and the data pkls — see [instructions.md](instructions.md) §5).
+Rebuild it with `python -m scripts.generate_placement_report` (needs `pdflatex` and the two seed pkls; regenerate the pkls in a few minutes with `python -m scripts.generate_seed_pkls` — see [instructions.md](instructions.md) §5).
 
 ## What's here
 
@@ -112,7 +115,7 @@ The full 22 k-pair corpus is not committed (the heatmap pkls are 14+ GB). The Mo
 2. `modal_build_combined.py` — combines convex + concave into the unified training pkl.
 3. `modal_train_perthet.py` — trains the U-Net (≈ 30 min on A100-80GB, batch 256, cosine LR 3e-4 → 0, 8 000 steps).
 
-Two seed pkls (`bc_snapshot_raster128.pkl`, `bo_train_pool_10k.pkl`, ~1.2 GB combined) are required as input and are **not** in the repo. See [instructions.md](instructions.md) §6 for the upload + run commands.
+Two seed pkls (`bc_snapshot_raster128.pkl`, `bo_train_pool_10k.pkl`, ~1.2 GB combined) are required as input and are **not** in the repo — they regenerate locally in a few minutes with `python -m scripts.generate_seed_pkls`. See [instructions.md](instructions.md) §6 for the upload + run commands.
 
 ## License
 

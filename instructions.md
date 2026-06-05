@@ -112,7 +112,16 @@ Both polygons must lie in `[-1, 1] × [-1, 1]` (the model's normalized world). I
 
 ### 4.3 Smoke test against the held-out validation set
 
-`scripts/smoke_refine.py` evaluates the model on `N` random pairs from the convex validation split. **This requires the data file `data/bc_snapshot_raster128.pkl` (482 MB), which is NOT in the repo** — only the trained checkpoint is committed. If you have a copy, drop it into `data/` and run:
+`scripts/smoke_refine.py` evaluates the model on `N` random pairs from the convex validation split. It needs `data/bc_snapshot_raster128.pkl` (482 MB), which is not in the repo. Two ways to get it:
+
+```bash
+# Option A - regenerate it locally (a few minutes, no Modal, no external download):
+python -m scripts.generate_seed_pkls --n-convex 12000 --n-concave 0
+
+# Option B - drop a pre-existing copy into data/ and skip the previous step.
+```
+
+Then:
 
 ```bash
 python -m scripts.smoke_refine                                    # 5 random val pairs
@@ -120,7 +129,7 @@ python -m scripts.smoke_refine --n 25 --device cpu                # bigger sampl
 python -m scripts.smoke_refine --refine-pixels 0 --refine-thetas 0  # model-only
 ```
 
-If you don't have the pkl, use `scripts/demo.py` instead — it exercises the same code path on synthetic pairs.
+If you only want a quick sanity check and don't care about the val pairs, use `scripts/demo.py` — it generates a random pair on the fly and exercises the same code path with no data files at all.
 
 ---
 
@@ -129,18 +138,25 @@ If you don't have the pkl, use `scripts/demo.py` instead — it exercises the sa
 The 4 MB LaTeX report (12 convex + 6 concave example pages, full methodology, summary) is already committed at `visualizations/report/placement_pipeline_report.pdf`. To rebuild it from scratch:
 
 ```bash
+# 1. Regenerate the two seed pkls (~1.2 GB combined, a few minutes).
+#    Only needs the geometry primitives in src/ — no model, no Modal.
+python -m scripts.generate_seed_pkls
+
+# 2. Render the report.
 python -m scripts.generate_placement_report                       # default (12 + 6)
 python -m scripts.generate_placement_report --n-convex 4 --n-concave 2  # quicker
 python -m scripts.generate_placement_report --no-compile          # emit .tex only
 ```
 
 **Requirements for this step:**
-- `pdflatex` on PATH (install MiKTeX on Windows or TeX Live elsewhere; verify with `pdflatex --version`).
-- `data/bc_snapshot_raster128.pkl` (482 MB) — convex source.
-- `data/bo_train_pool_10k.pkl` (709 MB) — concave source.
-- `data/reward_heatmaps_exp_k10_inside.npy_chunks/pair_NNNNN.npy` — pre-computed brute-force reward heatmaps for the convex pairs (used as ground-truth `r*`).
+- `pdflatex` on PATH (install MiKTeX on Windows or TeX Live elsewhere; verify with `pdflatex --version`). Use `--no-compile` to skip this and produce only the `.tex` + figures.
+- `data/bc_snapshot_raster128.pkl` (482 MB) — convex source. Regenerate with `python -m scripts.generate_seed_pkls`.
+- `data/bo_train_pool_10k.pkl` (709 MB) — concave source. Same command regenerates this.
+- `data/reward_heatmaps_exp_k10_inside.npy_chunks/pair_NNNNN.npy` (27 GB) — **optional**. Pre-computed brute-force reward heatmaps for the convex pairs. When absent, the report script falls back to computing the BF heatmap on the fly per picked pair (~7–40 s each), exactly like it already does for concave pairs. The chunks directory only speeds things up if you're rendering hundreds of pages.
 
-Concave brute-force is computed on the fly during the report run (~7–40 s per pair, serial Shapely + IFP).
+Concave brute-force is always computed on the fly during the report run (~7–40 s per pair, serial Shapely + IFP).
+
+> **Note on `--n-convex` / `--n-concave`:** these are sample counts, not pool sizes. Defaults are `12` and `6`. The numbers `12000` / `10000` in the source are just the upper bounds of the validation pool the picks are drawn from — passing them as sample counts will try to render every val pair, which on the on-the-fly BF path is many hours of CPU. Start small.
 
 ---
 
@@ -157,18 +173,26 @@ modal token new        # opens a browser, links this machine to your Modal accou
 
 ### 6.2 Provide the seed data
 
-Two pkl files seed the entire pipeline. Neither is in the repo (they're 0.5–0.7 GB each and regenerating them needs scripts not yet published):
+Two pkl files seed the entire pipeline. Neither is in the repo (they're 0.5–0.7 GB each):
 
 - `data/bc_snapshot_raster128.pkl` — 12 000 convex–convex pairs with WKT polygons.
 - `data/bo_train_pool_10k.pkl` — 10 000 (concave-fs, convex-part) pairs with WKT polygons.
 
-Upload them once to your Modal volume:
+Regenerate them locally (a few minutes, no Modal needed for this step):
+
+```bash
+python -m scripts.generate_seed_pkls          # writes both pkls to data/
+```
+
+Then upload to your Modal volume:
 
 ```bash
 modal volume create nestingrl-data            # if not already created
 modal volume put nestingrl-data data/bc_snapshot_raster128.pkl /bc_snapshot_raster128.pkl
 modal volume put nestingrl-data data/bo_train_pool_10k.pkl /bo_train_pool_10k.pkl
 ```
+
+> The regenerated pkls are not byte-identical to the originals used during the internship (they use a different RNG seed sequence), but the distribution and format match. The downstream precompute, train, and report scripts all run against them with no code changes. Validation indices in the report script reference positions in the file, so example pair IDs in the resulting PDF will differ.
 
 Check what's on the volume:
 
@@ -246,4 +270,6 @@ modal volume get nestingrl-data /checkpoints/perthet_combined/final.pt \
 | Demo prints a low or zero reward | The random pair may be near-degenerate. Try a different `--seed`. |
 | Modal job stalls in "pkl loading" | Confirm the volume actually has the two seed pkls (`modal volume ls nestingrl-data`). |
 | `import pyclipper` fails on macOS | `pip install pyclipper` may need build tools; `brew install gcc` then retry. |
-| Smoke test errors with FileNotFoundError on `data/bc_snapshot_raster128.pkl` | You don't have the validation pkl. Use `scripts/demo.py` instead, or obtain the pkl separately. |
+| `FileNotFoundError: data/bc_snapshot_raster128.pkl` (smoke test or report) | The seed pkl isn't on disk. Regenerate it locally with `python -m scripts.generate_seed_pkls` (or pass `--convex-source`/`--source` to point at an existing copy). For a quick model sanity check with no data files at all, use `scripts/demo.py`. |
+| `FileNotFoundError: data/bo_train_pool_10k.pkl` (report) | Same fix — `python -m scripts.generate_seed_pkls` regenerates both seed pkls. |
+| `FileNotFoundError: data/reward_heatmaps_exp_k10_inside.npy_chunks/pair_NNNNN.npy` | Stale message from an older build. The report script now falls back to computing convex BF on the fly when chunks are missing. Pull the latest `main` if you still hit this. |

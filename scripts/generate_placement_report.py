@@ -169,10 +169,20 @@ def _summarize_bf(bf):
     return bf, t_idx, r_idx, c_idx, theta_deg, x_star, y_star, r_star
 
 
-def load_brute_force_convex(idx):
-    """Load precomputed brute-force heatmap chunk for a convex pair."""
+def resolve_brute_force_convex(idx, fs, part, k=10.0):
+    """Return BF heatmap for a convex pair.
+
+    Loads `BF_CHUNKS_DIR/pair_NNNNN.npy` if present (the precomputed corpus),
+    otherwise computes the heatmap on the fly via Shapely + IFP. The on-the-fly
+    path matches the concave pipeline (~7-40s per pair) and lets the report run
+    without the 27 GB chunks directory.
+    """
     path = os.path.join(BF_CHUNKS_DIR, f"pair_{idx:05d}.npy")
-    return _summarize_bf(np.load(path).astype(np.float32))
+    if os.path.exists(path):
+        return _summarize_bf(np.load(path).astype(np.float32))
+    print(f"    BF chunk {path} not found - computing on the fly "
+          "(7-40s, requires only the seed pkl)", flush=True)
+    return compute_brute_force_on_the_fly(fs, part, k=k)
 
 
 def compute_brute_force_on_the_fly(fs, part, k=10.0, verbose=False):
@@ -993,8 +1003,11 @@ def main():
             fig_path = os.path.join(figs_dir, f"{label}.png")
             print(f"  [convex {k+1}/{len(picks)}] pair {idx}",
                   flush=True)
-            bf_tuple = load_brute_force_convex(idx)
-            row = render_pair_figure(fig_path, pm, convex_records[idx],
+            rec = convex_records[idx]
+            fs = wkt_loads(rec["fs_poly_wkt"])
+            part = wkt_loads(rec["part_poly_wkt"])
+            bf_tuple = resolve_brute_force_convex(idx, fs, part, k=10.0)
+            row = render_pair_figure(fig_path, pm, rec,
                                      label, bf_tuple,
                                      args.refine_pixels, args.refine_thetas)
             convex_rows.append(row)
